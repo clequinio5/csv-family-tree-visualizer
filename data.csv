@@ -1,0 +1,6 @@
+Nom;Pere;Mere;Sexe;Infos
+Henvin;;;F;
+ElasticSearch;;;M;
+La Ptac;;;F;
+Le Calator;ElasticSearch;Henvin;M;Competition1 45/345|Competition2 10/456|Hello
+Pijou;Le Calator;La Ptac;M;La Marmande 1/324|Barcelone 15/890

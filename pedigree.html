@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+
+<style>
+  body {
+    font: 10px sans-serif;
+  }
+
+  .linage {
+    fill: none;
+    stroke: #000;
+  }
+
+  .marriage {
+    fill: none;
+    stroke: black;
+  }
+
+  .man {
+    background-color: lightblue;
+    border-style: solid;
+    border-width: 1px;
+    box-sizing: border-box;
+  }
+
+  .woman {
+    background-color: pink;
+    border-style: solid;
+    border-width: 1px;
+    box-sizing: border-box;
+  }
+
+  .emphasis {
+    font-style: italic;
+  }
+
+  p {
+    padding: 0;
+    margin: 0;
+  }
+
+  svg {
+    border-style: solid;
+    border-width: 1px;
+  }
+</style>
+
+<head>
+  <meta charset="utf-8">
+  <title>Pedigree</title>
+</head>
+
+<script src="./lib/d3.v4.min.js" charset="utf-8"></script>
+<script src="./lib/lodash.min.js" charset="utf-8"></script>
+<script src="./lib/dTree.min.js" charset="utf-8"></script>
+
+<body>
+  <input type="file" id="input" onchange='openFile(event)'>
+  <div id="graph"></div>
+  <script>
+
+    const options = {
+      target: '#graph',
+      debug: false,
+      width: 600,
+      height: 600,
+      hideMarriageNodes: true,
+      marriageNodeSize: 10,
+      callbacks: {
+        nodeClick: function (name, extra) {
+          console.log(name);
+        },
+        textRenderer: function (name, extra, textClass) {
+          // THis callback is optinal but can be used to customize
+          // how the text is rendered without having to rewrite the entire node
+          // from screatch.
+          name = "<b>" + name + "</b>"
+          if (extra && extra.infos)
+
+            name = name + "<br/>" + extra.infos.split("|").join("<br/>");
+          return "<p align='center' class='" + textClass + "'>" + name + "</p>";
+        },
+        nodeRenderer: function (name, x, y, height, width, extra, id, nodeClass, textClass, textRenderer) {
+          // This callback is optional but can be used to customize the
+          // node element using HTML.
+          let node = '';
+          node += '<div ';
+          node += 'style="height:100%;width:100%;" ';
+          node += 'class="' + nodeClass + '" ';
+          node += 'id="node' + id + '">\n';
+          node += textRenderer(name, extra, textClass);
+          node += '</div>';
+          return node;
+        }
+      },
+      margin: {
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0
+      },
+      nodeWidth: 100,
+      styles: {
+        node: 'node',
+        linage: 'linage',
+        marriage: 'marriage',
+        text: 'nodeText'
+      }
+    }
+
+
+    const buildMarriagesObj = function (marriages, key, spouse, child) {
+      if (!Object.keys(marriages).includes(key)) {
+        Object.assign(marriages, { [key]: [{ spouse: spouse, children: [child] }] })
+      } else {
+        let uMarriages = marriages[key]
+        let marriageExists = false
+        for (let marriage of uMarriages) {
+          if (marriage.spouse == spouse && !marriage.children.includes(child)) {
+            marriage.children.push(child)
+            marriageExists = true
+            break;
+          }
+        }
+        if (!marriageExists) {
+          uMarriages.push({ spouse: spouse, children: [child] })
+        }
+      }
+    }
+
+    const pigeonToJsonData = function (nodeKey, nodes) {
+      const pigeon = nodes[nodeKey]
+      return { name: nodeKey, class: pigeon.sex, extra: { infos: pigeon.infos } }
+    }
+
+    const buildTree = function (nodeKey, nodes, marriages) {
+      const pigeon = pigeonToJsonData(nodeKey, nodes)
+      let uMarriages = marriages[nodeKey]
+      if (!uMarriages) { return pigeon }
+      for (let uMarriage of uMarriages) {
+        uMarriage.spouse = pigeonToJsonData(uMarriage.spouse, nodes)
+        uMarriage.children = uMarriage.children.map(child => buildTree(child, nodes, marriages))
+      }
+      return Object.assign(pigeon, { marriages: uMarriages })
+    }
+
+    const csvToJsonTree = function (csv) {
+      const nodes = csv.split("\n").slice(1).reduce((acc, curr) => {
+        const vals = curr.split(";")
+        acc = Object.assign(acc, { [vals[0]]: { father: vals[1], mother: vals[2], sex: vals[3] == "F" ? "woman" : "man", infos: vals[4] } })
+        return acc
+      }, {})
+      delete nodes[""]
+      const marriages = {}
+      for (const nodeKey of Object.keys(nodes)) {
+        const child = nodeKey
+        const { father, mother } = nodes[nodeKey]
+        buildMarriagesObj(marriages, father, mother, child)
+        buildMarriagesObj(marriages, mother, father, child)
+      }
+      const roots = Object.keys(nodes).filter(el => nodes[el].father == "")
+      for (const root of roots) {
+        const tree = buildTree(root, nodes, marriages)
+        return tree
+      }
+    }
+
+    const renderTree = function (data) {
+      console.log(JSON.stringify(data, null, 4))
+      document.getElementById("graph").innerHTML = '';
+      dTree.init(data, options);
+    }
+
+    const openFile = function (event) {
+      const input = event.target;
+      const reader = new FileReader();
+      reader.onload = function () {
+        const text = reader.result;
+        const tree = [csvToJsonTree(text)]
+        renderTree(tree)
+        input.value = '';
+      };
+      reader.readAsText(input.files[0]);
+    };
+
+  </script>
+</body>
+
+</html>
